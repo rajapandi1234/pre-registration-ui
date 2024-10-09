@@ -3,14 +3,45 @@ name: Trivy Scan
 on:
   push:
     branches:
+      - main
+      - 'release-1*'
       - develop
+      - '1.2.*'
+      - master
+      - MOSIP-35889
+  pull_request:
+    branches:
+      - main
+      - 'release-1*'
+      - develop
+      - '1.2.*'
+      - master
+      - MOSIP-35889
 
 jobs:
-  call-trivy-scan:
-    uses: rajapandi1234/kattu/.github/workflows/trivy.yml@master
-    with:
-      service_location: 'pre-registration-ui'
-      version: 'latest'
-      service_name: 'pre-registration-ui'
-    secrets:
-      dev_namespace_docker_hub: ${{ secrets.dev_namespace_docker_hub }}
+  trivy-scan:
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: ${{ secrets.dev_namespace_docker_hub }}
+      SERVICE_NAME: pre-registration-ui
+      VERSION: latest  # Modify this as needed or set dynamically based on your versioning scheme
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Build Docker image
+        run: |
+          cd "${{ env.SERVICE_LOCATION }}"
+          docker build . --file Dockerfile --tag ${{ env.SERVICE_NAME }}:${{ env.VERSION }}
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: 'docker.io/${{ env.SERVICE_NAME }}:${{ env.VERSION }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
